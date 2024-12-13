@@ -64,6 +64,7 @@ async function sinspect(urls, monitor, woutput, start=0) {
         .flatMap(r => getHBResponse(browser, r, monitor))
     
 	const blocked = browserStream
+        .ignoreErrors()
 		.filter(({record}) => record.blocked)
 
 	blocked.onValue(record => {
@@ -82,7 +83,6 @@ async function sinspect(urls, monitor, woutput, start=0) {
 		.filter(({record}) => !record.blocked)
 
 	const retsnapshots = blocked
-        .ignoreErrors()
 		.flatMapConcat(v => Kefir.later(5000, v))
 		.flatMap(v => (
 			Kefir
