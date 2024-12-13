@@ -1,6 +1,4 @@
 const cli = require('./cli');
-const {flags} = cli;
-
 const { formatRecord } = require('./format')
 const { getDnsData } = require('./dns');
 const { 
@@ -12,7 +10,7 @@ const {
 const { deltaT } = require('./utils');
 const Kefir = require('kefir');
 
-
+const {flags} = cli;
 const BATCH_SIZE = flags.batchSize
 
 
@@ -52,7 +50,7 @@ async function sinspect(urls, monitor, woutput, start=0) {
 		monitor.monit({
 			key: record.id,
 			url: record.parsedUrl.href,
-			status: `VISITING`
+			status: `PENDING`
 		})
 	})
 	dnsStream.onError(record => {
@@ -60,22 +58,10 @@ async function sinspect(urls, monitor, woutput, start=0) {
 			msg: 'DNS lookup failed for:', 
 			record,
 		}, 'error')
-        monitor.monit({
-			key: record.id,
-			url: record.parsedUrl.href,
-			status: `FINISHED`
-		})
 	})
 
 	const browserStream = dnsStream
         .flatMap(r => getHBResponse(browser, r, monitor))
-    browserStream.onError(record => {
-        monitor.monit({
-			key: record.id,
-			url: record.parsedUrl.href,
-			status: `FINISHED`
-		})
-    })
     
 	const blocked = browserStream
 		.filter(({record}) => record.blocked)
@@ -90,17 +76,13 @@ async function sinspect(urls, monitor, woutput, start=0) {
 			msg: 'Attempting to retrieve closest Wayback Machine snapshot for:',
 			record
 		})
-        monitor.monit({
-			key: record.id,
-			url: record.parsedUrl.href,
-			status: `BLOCKED`
-		})
 	})
 
     const finished = browserStream
 		.filter(({record}) => !record.blocked)
 
 	const retsnapshots = blocked
+        .ignoreErrors()
 		.flatMapConcat(v => Kefir.later(5000, v))
 		.flatMap(v => (
 			Kefir
@@ -108,13 +90,6 @@ async function sinspect(urls, monitor, woutput, start=0) {
 				.map(wbs => ({...v, ...wbs}))
 				.mapErrors(wbs => ({...v, ...wbs}))
 		))
-    retsnapshots.onError(record => {
-        monitor.monit({
-            key: record.id,
-            url: record.parsedUrl.href,
-            status: `FINISHED`
-        })
-    })
 
 	const noWbSnapshots = retsnapshots
 		.filter(r => r.wbSnapshot===null)
@@ -133,40 +108,18 @@ async function sinspect(urls, monitor, woutput, start=0) {
 			msg: 'Wayback Machine snapshot found for:',
 			record
 		})
-        monitor.monit({
-            key: record.id,
-            url: record.parsedUrl.href,
-            status: `WBMACHINE`
-        })
 	})
 
 	const wbSnapshots = wbSnapshotFound
 		.flatMap(r => getWaybackSnapshot(browser, r, monitor))
-    wbSnapshots.onError(record => {
-        monitor.log({
-			msg: 'Failed to retrieve Wayback Machine snapshot for:',
-			record
-		})
-    })
-    const snapshots = Kefir
-        .concat([noWbSnapshots, wbSnapshots])
-
-	const final = Kefir
-		.concat([finished, snapshots])
-
-    const ffinal = final.map(formatRecord)
-	fromFile && ffinal.flatMapErrors(Kefir.constant).onValue(woutput)
     
-	if(flags.debug){final.log()}
-
-	
-    if (!flags.monit && !fromFile)
-	{ ffinal.log('sinspect') }
+	const final = Kefir
+		.merge([finished, noWbSnapshots, wbSnapshots])
 
     final.onValue(value => {
         value.wbSnapshot && monitor.log({
             msg: 'Wayback Machine snapshot successfully retrieved for:',
-            record
+            record: value,
         })
         monitor.log({
             msg: 'Finished processing URL:',
@@ -180,6 +133,10 @@ async function sinspect(urls, monitor, woutput, start=0) {
     })
 
     final.onError(value => {
+        value.wbSnapshot && monitor.log({
+			msg: 'Failed to retrieve Wayback Machine snapshot for:',
+			record: value,
+		})
         monitor.log({
             msg: 'Finished processing URL:',
             record: value,
@@ -206,6 +163,15 @@ async function sinspect(urls, monitor, woutput, start=0) {
             nextStart,
         )
     })
+
+    const ffinal = final.map(formatRecord)
+	fromFile && ffinal.flatMapErrors(Kefir.constant).onValue(woutput)
+    
+	if(flags.debug){final.log()}
+
+	
+    if (!flags.monit && !fromFile)
+	{ ffinal.log('sinspect') }
 }
 
 module.exports = sinspect
