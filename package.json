@@ -1,0 +1,38 @@
+{
+	"name": "site-inspect",
+	"description": "site-inspect is a powerful command-line tool for inspecting http urls and classify them",
+	"version": "0.2.6",
+	"license": "UNLICENSED",
+	"bin": {
+		"site-inspect": "index.js",
+		"sinspect": "index.js"
+	},
+	"keywords": [
+		"site-inspect"
+	],
+	"files": [
+		"index.js",
+		"utils"
+	],
+	"scripts": {
+		"format": "prettier --write \"./**/*.{js,json}\""
+	},
+	"dependencies": {
+		"axios": "^1.7.9",
+		"cheerio": "^1.0.0-rc.12",
+		"cli-handle-error": "^4.4.0",
+		"cli-meow-help": "^3.1.0",
+		"csv-parse": "^5.4.0",
+		"csv-stringify": "^6.4.0",
+		"figlet": "^1.8.0",
+		"kefir": "^3.8.8",
+		"meow": "^9.0.0",
+		"playwright": "^1.33.0",
+		"xlsx": "^0.18.5"
+	},
+	"devDependencies": {
+		"chai": "^4.3.7",
+		"mocha": "^10.2.0",
+		"prettier": "^2.8.8"
+	}
+}
